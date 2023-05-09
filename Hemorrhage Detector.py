@@ -2,11 +2,14 @@
 # coding: utf-8
 
 # In[64]:
+import tempfile
 
-
+import matplotlib; matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
 import torch
 import numpy as np
+import os
+from pathlib import PurePath
 
 from monai.config import print_config
 
@@ -46,7 +49,7 @@ print_config()
 # In[2]:
 
 
-directory = '/media/14TB/aarlova_hem'
+directory = r'T:\MIP\Katie_Merriman\hemorrhage'
 root_dir = tempfile.mkdtemp() if directory is None else directory
 print(root_dir)
 
@@ -60,7 +63,7 @@ set_determinism(seed=0)
 
 # Dataset
 from pathlib import Path
-
+"""
 dataset_dir_name = '/media/14TB/aarlova_hem/data/'
 dataset_dir = Path(dataset_dir_name)
 
@@ -71,13 +74,69 @@ test_dataset_dir_name = '/media/14TB/aarlova_hem/test_noHem'
 test_masks_dir_name = '/media/14TB/aarlova_hem/test_masks'
 test_dataset_dir = Path(test_dataset_dir_name)
 test_masks_dir = Path(test_masks_dir_name)
+# creates PosixPath object.  Difference to my paths may be issue?
+# implemented to handle and manipulate non-Windows file system paths
 
 test_images = sorted(list(test_dataset_dir.rglob('SURG*_axial.nii.gz')))
 test_masks = sorted(list(test_masks_dir.rglob('SURG*_axial_mask.nii.gz')))
+"""
 
-print(f'There are {len(images)} images, and {len(masks)} masks')
+"""
+train_images = sorted(list(r'T:\MIP\Katie_Merriman\hemorrhage\train\images\SURG*_axial.nii.gz'))
+train_masks = sorted(list(r'T:\MIP\Katie_Merriman\hemorrhage\train\labels\SURG*_axial.nii.gz'))
+val_images = sorted(list(r'T:\MIP\Katie_Merriman\hemorrhage\val\images\SURG*_axial.nii.gz'))
+val_masks = sorted(list(r'T:\MIP\Katie_Merriman\hemorrhage\val\labels\SURG*_axial.nii.gz'))
+test_images = sorted(list(r'T:\MIP\Katie_Merriman\hemorrhage\test\images\SURG*_axial.nii.gz'))
+test_masks = sorted(list(r'T:\MIP\Katie_Merriman\hemorrhage\test\labels\SURG*_axial.nii.gz'))
+"""
+"""
+train_img_dir = r'T:\MIP\Katie_Merriman\hemorrhage\train\images'
+train_msk_dir = r'T:\MIP\Katie_Merriman\hemorrhage\train\labels'
+val_img_dir = r'T:\MIP\Katie_Merriman\hemorrhage\val\images'
+val_msk_dir = r'T:\MIP\Katie_Merriman\hemorrhage\val\labels'
+test_img_dir = r'T:\MIP\Katie_Merriman\hemorrhage\test\images'
+test_msk_dir = r'T:\MIP\Katie_Merriman\hemorrhage\test\labels'
+
+train_images = []
+train_masks = []
+val_images = []
+val_masks = []
+test_images = []
+test_masks =[]
+
+for img in os.listdir(r'T:\MIP\Katie_Merriman\hemorrhage\train\images'):
+    train_images.append(train_img_dir + 
+train_masks = sorted(os.listdir(r'T:\MIP\Katie_Merriman\hemorrhage\train\labels'))
+val_images = sorted(os.listdir(r'T:\MIP\Katie_Merriman\hemorrhage\val\images'))
+val_masks = sorted(os.listdir(r'T:\MIP\Katie_Merriman\hemorrhage\val\labels'))
+test_images = sorted(os.listdir(r'T:\MIP\Katie_Merriman\hemorrhage\test\images'))
+test_masks = sorted(os.listdir(r'T:\MIP\Katie_Merriman\hemorrhage\test\labels'))
+
+"""
+
+train_img_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\train\images')
+train_msk_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\train\labels')
+val_img_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\val\images')
+val_msk_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\val\labels')
+test_img_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\test\images')
+test_msk_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\test\labels')
+
+
+train_images = sorted(list(train_img_dir.rglob('SURG*_axial.nii.gz')))
+train_masks = sorted(list(train_msk_dir.rglob('SURG*_axial_mask.nii.gz')))
+val_images = sorted(list(val_img_dir.rglob('SURG*_axial.nii.gz')))
+val_masks = sorted(list(val_msk_dir.rglob('SURG*_axial_mask.nii.gz')))
+test_images = sorted(list(test_img_dir.rglob('SURG*_axial.nii.gz')))
+test_masks = sorted(list(test_msk_dir.rglob('SURG*_axial_mask.nii.gz')))
+
+
+
+
+print(f'There are {len(train_images)} train images, and {len(train_masks)} train masks')
+print(f'There are {len(val_images)} val images, and {len(val_masks)} val masks')
 print(f'There are {len(test_images)} test images')
 
+"""
 train_images = images[20:100]
 val_images1 = images[0:20]
 val_images2 = images[100:]
@@ -87,6 +146,7 @@ train_masks = masks[20:100]
 val_masks1 = masks[0:20]
 val_masks2 = masks[100:]
 val_masks = val_masks1 + val_masks2
+"""
 
 # create a Python dictionary
 # with two columns, one for the image paths and one for the label paths
@@ -262,7 +322,7 @@ for i in range(num_slices):
 
 # In[33]:
 
-
+plt.close()
 plt.figure('one patient', (10, 5))
 
 for i in range(num_slices):
@@ -271,7 +331,7 @@ for i in range(num_slices):
     plt.imshow(test_patient['mask'][0, i, 0, :, :], cmap='summer')
 
 # In[42]:
-
+plt.close()
 
 dice_metric = DiceMetric(include_background=False, reduction="mean", get_not_nans=False)
 froc = compute_fp_tp_probs
@@ -410,6 +470,7 @@ with torch.no_grad():
         plt.imshow(np.rot90(test_images[2].cpu().permute(1, 2, 0), k=3), cmap='gray')
         # plt.imshow(np.rot90(test_labels[2].cpu().permute(1, 2, 0), k=3), cmap = cmap1, alpha=0.3)
         plt.show()
+        # save as test_data['img_meta_dict']['filename_or_obj'][0][45:53]
         plt.cla()
         plt.clf()
         plt.close()
