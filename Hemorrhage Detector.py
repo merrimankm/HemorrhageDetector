@@ -28,8 +28,10 @@ from monai.transforms import (
     Orientationd,
     CenterSpatialCropd,
     RandCropByLabelClassesd,
+    RandSpatialCropd,
     NormalizeIntensityd,
     Rotate90d
+
 )
 from monai.utils import set_determinism, first
 
@@ -63,56 +65,6 @@ set_determinism(seed=0)
 
 # Dataset
 from pathlib import Path
-"""
-dataset_dir_name = '/media/14TB/aarlova_hem/data/'
-dataset_dir = Path(dataset_dir_name)
-
-images = sorted(list(dataset_dir.rglob('SURG*_axial.nii.gz')))
-masks = sorted(list(dataset_dir.rglob('SURG*_axial_mask.nii.gz')))
-
-test_dataset_dir_name = '/media/14TB/aarlova_hem/test_noHem'
-test_masks_dir_name = '/media/14TB/aarlova_hem/test_masks'
-test_dataset_dir = Path(test_dataset_dir_name)
-test_masks_dir = Path(test_masks_dir_name)
-# creates PosixPath object.  Difference to my paths may be issue?
-# implemented to handle and manipulate non-Windows file system paths
-
-test_images = sorted(list(test_dataset_dir.rglob('SURG*_axial.nii.gz')))
-test_masks = sorted(list(test_masks_dir.rglob('SURG*_axial_mask.nii.gz')))
-"""
-
-"""
-train_images = sorted(list(r'T:\MIP\Katie_Merriman\hemorrhage\train\images\SURG*_axial.nii.gz'))
-train_masks = sorted(list(r'T:\MIP\Katie_Merriman\hemorrhage\train\labels\SURG*_axial.nii.gz'))
-val_images = sorted(list(r'T:\MIP\Katie_Merriman\hemorrhage\val\images\SURG*_axial.nii.gz'))
-val_masks = sorted(list(r'T:\MIP\Katie_Merriman\hemorrhage\val\labels\SURG*_axial.nii.gz'))
-test_images = sorted(list(r'T:\MIP\Katie_Merriman\hemorrhage\test\images\SURG*_axial.nii.gz'))
-test_masks = sorted(list(r'T:\MIP\Katie_Merriman\hemorrhage\test\labels\SURG*_axial.nii.gz'))
-"""
-"""
-train_img_dir = r'T:\MIP\Katie_Merriman\hemorrhage\train\images'
-train_msk_dir = r'T:\MIP\Katie_Merriman\hemorrhage\train\labels'
-val_img_dir = r'T:\MIP\Katie_Merriman\hemorrhage\val\images'
-val_msk_dir = r'T:\MIP\Katie_Merriman\hemorrhage\val\labels'
-test_img_dir = r'T:\MIP\Katie_Merriman\hemorrhage\test\images'
-test_msk_dir = r'T:\MIP\Katie_Merriman\hemorrhage\test\labels'
-
-train_images = []
-train_masks = []
-val_images = []
-val_masks = []
-test_images = []
-test_masks =[]
-
-for img in os.listdir(r'T:\MIP\Katie_Merriman\hemorrhage\train\images'):
-    train_images.append(train_img_dir + 
-train_masks = sorted(os.listdir(r'T:\MIP\Katie_Merriman\hemorrhage\train\labels'))
-val_images = sorted(os.listdir(r'T:\MIP\Katie_Merriman\hemorrhage\val\images'))
-val_masks = sorted(os.listdir(r'T:\MIP\Katie_Merriman\hemorrhage\val\labels'))
-test_images = sorted(os.listdir(r'T:\MIP\Katie_Merriman\hemorrhage\test\images'))
-test_masks = sorted(os.listdir(r'T:\MIP\Katie_Merriman\hemorrhage\test\labels'))
-
-"""
 
 train_img_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\train\images')
 train_msk_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\train\labels')
@@ -136,17 +88,6 @@ print(f'There are {len(train_images)} train images, and {len(train_masks)} train
 print(f'There are {len(val_images)} val images, and {len(val_masks)} val masks')
 print(f'There are {len(test_images)} test images')
 
-"""
-train_images = images[20:100]
-val_images1 = images[0:20]
-val_images2 = images[100:]
-val_images = val_images1 + val_images2
-
-train_masks = masks[20:100]
-val_masks1 = masks[0:20]
-val_masks2 = masks[100:]
-val_masks = val_masks1 + val_masks2
-"""
 
 # create a Python dictionary
 # with two columns, one for the image paths and one for the label paths
@@ -175,13 +116,6 @@ print(test_files[-1:])
 
 # define transforms for image and segmentation
 
-# , reader=NibabelReader(channel_dim=-1)),
-# Orientationd(keys=['img', 'mask'], axcodes="RSP"),
-
-# orig_transforms is a sanity check transforms
-# CenterSpatialCropd(keys=['img', 'mask'], roi_size=(1,120,120)),
-
-
 orig_transforms = Compose(
     [
         LoadImaged(keys=['img', 'mask'], reader=NibabelReader(channel_dim=-1)),
@@ -198,9 +132,10 @@ train_transforms = Compose(
 
         # ScaleIntensityRanged(keys=['img'], a_min = -200, a_max = 200, b_min = 0, b_max = 1),
         NormalizeIntensityd(keys=['img'], nonzero=True),
-        # RandCropByLabelClassesd(keys=['img','mask'], label_key='mask', spatial_size=[1,64,64]),#, ratios=[1,1], num_classes=2, num_samples=6),
-        CenterSpatialCropd(keys=['img', 'mask'], roi_size=(1, 120, 120)),
-
+        #CenterSpatialCropd(keys=['img', 'mask'], roi_size=(1, 120, 120)),
+        #RandCropByLabelClassesd(keys=['img', 'mask'], label_key="img", spatial_size=[1, 120, 120], ratios=[2, 1],
+        #                    num_classes=2, num_samples=6),
+        RandSpatialCropd(keys=['img', 'mask'], roi_size=(1, 120, 120), random_center=True, random_size=False),
         ToTensord(keys=['img', 'mask'])
     ])
 
@@ -232,21 +167,6 @@ test_transforms = Compose(
         ToTensord(keys=['img'])
     ])
 
-### test transforms with GT mask
-# test_transforms = Compose(
-# [
-#     LoadImaged(keys=['img','mask'], reader=NibabelReader(channel_dim=-1)),
-#     AddChanneld(keys=['img','mask']),
-#     EnsureChannelFirstd(keys=['img', 'mask']),
-
-#     # ScaleIntensityRanged(keys=['img'], a_min = -200, a_max = 200, b_min = 0, b_max = 1),
-#     NormalizeIntensityd(keys=['img'], nonzero=True),
-
-#     CenterSpatialCropd(keys=['img', 'mask'], roi_size=(1,120,120)),
-
-#     ToTensord(keys = ['img','mask'])
-# ])
-
 
 # In[104]:
 
@@ -262,21 +182,6 @@ val_loader = DataLoader(val_ds, batch_size=1)  # , collate_fn=pad_list_data_coll
 
 test_ds = Dataset(data=test_files, transform=test_transforms)
 test_loader = DataLoader(test_ds, batch_size=1)
-
-# In[105]:
-
-
-# wrong_labels = []
-# for batch_data in train_loader:
-#     # print(batch_data['img'].shape, batch_data['mask'].shape)
-#     inputs, labels = batch_data['img'].squeeze(dim=0), batch_data['mask'].squeeze(dim=0).cpu()
-#     labels = labels.get_array()
-#     print(np.unique(labels))
-#     print(batch_data['img_meta_dict']['filename_or_obj'])
-
-
-# In[106]:
-
 
 # visualize one slice from one patient
 
@@ -365,7 +270,7 @@ best_metric_epoch = -1
 epoch_loss_values = list()
 metric_values = list()
 
-epochs = 200
+epochs = 5
 
 for epoch in range(epochs):
     print("-" * 10)
