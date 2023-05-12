@@ -95,9 +95,10 @@ print(f'There are {len(test_images)} test images')
 train_files = [{'img': img_name, 'mask': mask_name} for img_name, mask_name in zip(train_images, train_masks)]
 val_files = [{'img': img_name, 'mask': mask_name} for img_name, mask_name in zip(val_images, val_masks)]
 
-test_files = [{'img': img_name} for img_name in test_images]
+test_files = [{'img': img_name, 'mask': mask_name} for img_name, mask_name in zip(test_images, test_masks)]
+#test_files = [{'img': img_name} for img_name in test_images]
 # test_files = [{'img': img_name, 'mask': mask_name} for img_name, mask_name in zip(test_images, test_masks)]
-
+#test_labels = [{'msk': mask_name} for mask_name in test_masks]
 
 # In[99]:
 
@@ -132,7 +133,7 @@ train_transforms = Compose(
 
         # ScaleIntensityRanged(keys=['img'], a_min = -200, a_max = 200, b_min = 0, b_max = 1),
         NormalizeIntensityd(keys=['img'], nonzero=True),
-        #CenterSpatialCropd(keys=['img', 'mask'], roi_size=(1, 120, 120)),
+        CenterSpatialCropd(keys=['img', 'mask'], roi_size=(1, 180, 180)),
         #RandCropByLabelClassesd(keys=['img', 'mask'], label_key="img", spatial_size=[1, 120, 120], ratios=[2, 1],
         #                    num_classes=2, num_samples=6),
         RandSpatialCropd(keys=['img', 'mask'], roi_size=(1, 120, 120), random_center=True, random_size=False),
@@ -155,16 +156,16 @@ val_transforms = Compose(
 ### test transforms with no GT mask
 test_transforms = Compose(
     [
-        LoadImaged(keys=['img'], reader=NibabelReader(channel_dim=-1)),
-        AddChanneld(keys=['img']),
-        EnsureChannelFirstd(keys=['img']),
+        LoadImaged(keys=['img', 'mask'], reader=NibabelReader(channel_dim=-1)),
+        AddChanneld(keys=['img', 'mask']),
+        EnsureChannelFirstd(keys=['img', 'mask']),
 
         # ScaleIntensityRanged(keys=['img'], a_min = -200, a_max = 200, b_min = 0, b_max = 1),
         NormalizeIntensityd(keys=['img'], nonzero=True),
 
-        CenterSpatialCropd(keys=['img'], roi_size=(1, 120, 120)),
+        CenterSpatialCropd(keys=['img', 'mask'], roi_size=(1, 120, 120)),
 
-        ToTensord(keys=['img'])
+        ToTensord(keys=['img', 'mask'])
     ])
 
 
@@ -270,7 +271,7 @@ best_metric_epoch = -1
 epoch_loss_values = list()
 metric_values = list()
 
-epochs = 5
+epochs = 1
 
 for epoch in range(epochs):
     print("-" * 10)
@@ -356,8 +357,8 @@ with torch.no_grad():
     for test_data in test_loader:
         print(test_data['img_meta_dict']['filename_or_obj'])
 
-        # test_images, test_labels = test_data['img'].squeeze(dim=0).to(device), test_data['mask'].squeeze(dim=0).to(device)
-        test_images = test_data['img'].squeeze(dim=0).to(device)
+        test_images, test_labels = test_data['img'].squeeze(dim=0).to(device), test_data['mask'].squeeze(dim=0).to(
+                device)
 
         num_slices = len(test_images)
         n_rows = int(np.ceil(num_slices / 3))
@@ -366,14 +367,17 @@ with torch.no_grad():
         sw_batch_size = 4
         test_outputs = sliding_window_inference(test_images, roi_size, sw_batch_size, model)
         test_outputs = [post_trans(i) for i in decollate_batch(test_outputs)]
-        plt.subplot(2, 2, 1)
+        plt.subplot(1, 3, 1)
         plt.title('Predicted Mask')
         plt.imshow(np.rot90(test_images[2].cpu().permute(1, 2, 0), k=3), cmap='gray')
         plt.imshow(np.rot90(test_outputs[2].cpu().permute(1, 2, 0), k=3), cmap=cmap, alpha=0.3)
-        plt.subplot(2, 2, 2)
+        plt.subplot(1, 3, 2)
+        plt.title('Base Image')
+        plt.imshow(np.rot90(test_images[2].cpu().permute(1, 2, 0), k=3), cmap='gray')
+        plt.subplot(1, 3, 3)
         plt.title('Ground Truth Mask')
         plt.imshow(np.rot90(test_images[2].cpu().permute(1, 2, 0), k=3), cmap='gray')
-        # plt.imshow(np.rot90(test_labels[2].cpu().permute(1, 2, 0), k=3), cmap = cmap1, alpha=0.3)
+        plt.imshow(np.rot90(test_labels[2].cpu().permute(1, 2, 0), k=3), cmap=cmap, alpha=0.3)
         plt.show()
         # save as test_data['img_meta_dict']['filename_or_obj'][0][45:53]
         plt.cla()
