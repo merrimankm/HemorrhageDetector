@@ -3,7 +3,6 @@
 
 # In[64]:
 import tempfile
-
 import matplotlib; matplotlib.use('Qt5Agg')
 import matplotlib.pyplot as plt
 import torch
@@ -29,6 +28,7 @@ from monai.transforms import (
     CenterSpatialCropd,
     RandCropByLabelClassesd,
     RandSpatialCropd,
+    RandFlipd,
     NormalizeIntensityd,
     Rotate90d
 
@@ -40,7 +40,7 @@ from monai.data import pad_list_data_collate, decollate_batch
 
 from monai.networks.nets import UNet
 from monai.metrics import DiceMetric, compute_fp_tp_probs
-from monai.losses import DiceLoss
+from monai.losses import DiceLoss, DiceCELoss
 
 # from torch.utils.tensorboard import SummaryWriter
 from monai.inferers import sliding_window_inference
@@ -48,30 +48,55 @@ from monai.visualize import plot_2d_or_3d_image
 
 print_config()
 
+## Update user configurations
+local = 0
+outputLabel = "centerCrop_randomCrop_noflip_withDuplicates_ignoreEmptyFalse"
+numEpochs = 100
+# choose cuda on line 253!!
+
+
 # In[2]:
+set_determinism(seed=0)
 
-
-directory = r'T:\MIP\Katie_Merriman\hemorrhage'
+if local:
+    directory = r'T:\MIP\Katie_Merriman\hemorrhage'
+    outputFolder = os.path.join(directory, "output", outputLabel)
+else:
+    directory = '~/merrimankm/hemorrhage'
+    outputFolder = os.path.join('~/Mdrive_mount/MIP/Katie_Merriman/hemorrhage', "output", outputLabel)
 root_dir = tempfile.mkdtemp() if directory is None else directory
 print(root_dir)
 
+
+try:
+    os.mkdir(outputFolder)
+except OSError as error:
+    print(error)
+
 # In[3]:
+from pathlib import Path
 
+if local:
+    train_img_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\train\images')
+    train_msk_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\train\labels')
+    val_img_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\val\images')
+    val_msk_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\val\labels')
+    test_img_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\test\images')
+    test_msk_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\test\labels')
+else:
+    train_img_dir = Path(directory + '/train/images')
+    train_msk_dir = Path(directory + '/train/labels')
+    val_img_dir = Path(directory + '/val/images')
+    val_msk_dir = Path(directory + '/val/labels')
+    test_img_dir = Path(directory + '/test/images')
+    test_msk_dir = Path(directory + '/test/labels')
 
-set_determinism(seed=0)
 
 # In[98]:
 
 
 # Dataset
-from pathlib import Path
 
-train_img_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\train\images')
-train_msk_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\train\labels')
-val_img_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\val\images')
-val_msk_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\val\labels')
-test_img_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\test\images')
-test_msk_dir = Path(r'T:\MIP\Katie_Merriman\hemorrhage\test\labels')
 
 
 train_images = sorted(list(train_img_dir.rglob('SURG*_axial.nii.gz')))
@@ -137,7 +162,7 @@ train_transforms = Compose(
         #RandCropByLabelClassesd(keys=['img', 'mask'], label_key="img", spatial_size=[1, 120, 120], ratios=[2, 1],
         #                    num_classes=2, num_samples=6),
         RandSpatialCropd(keys=['img', 'mask'], roi_size=(1, 120, 120), random_center=True, random_size=False),
-        ToTensord(keys=['img', 'mask'])
+        ToTensord(keys=['img', 'mask'])#
     ])
 
 val_transforms = Compose(
@@ -193,23 +218,24 @@ print(orig_patient['img'].shape)
 print(test_patient['img'].shape)
 print(test_patient['mask'].shape)
 
-plt.figure('test', (10, 5))
+if local:
+    plt.figure('test', (10, 5))
 
-plt.subplot(1, 3, 1)
-plt.title('Orig patient')
-plt.imshow(orig_patient['img'][0, orig_patient['img'].shape[1] - 3, 0, :, :], cmap='gray')
+    plt.subplot(1, 3, 1)
+    plt.title('Orig patient')
+    plt.imshow(orig_patient['img'][0, orig_patient['img'].shape[1] - 3, 0, :, :], cmap='gray')
 
-plt.subplot(1, 3, 2)
-plt.title('Slice of a patient')
-plt.imshow(test_patient['img'][0, test_patient['img'].shape[1] - 3, 0, :, :], cmap='gray')
+    plt.subplot(1, 3, 2)
+    plt.title('Slice of a patient')
+    plt.imshow(test_patient['img'][0, test_patient['img'].shape[1] - 3, 0, :, :], cmap='gray')
 
-plt.subplot(1, 3, 3)
-plt.title('Mask of a patient')
-plt.imshow(test_patient['mask'][0, test_patient['mask'].shape[1] - 3, 0, :, :], cmap='summer')
+    plt.subplot(1, 3, 3)
+    plt.title('Mask of a patient')
+    plt.imshow(test_patient['mask'][0, test_patient['mask'].shape[1] - 3, 0, :, :], cmap='summer')
 
-plt.show()
-plt.cla()
-plt.close()
+    plt.show()
+    plt.cla()
+    plt.close()
 
 # In[73]:
 
@@ -239,11 +265,11 @@ for i in range(num_slices):
 # In[42]:
 plt.close()
 
-dice_metric = DiceMetric(include_background=False, reduction="mean", get_not_nans=False)
+dice_metric = DiceMetric(include_background=False, reduction="mean", get_not_nans=False, ignore_empty=False)
 froc = compute_fp_tp_probs
 post_trans = Compose([Activations(sigmoid=True), AsDiscrete(threshold=0.5)])
 # create UNet, DiceLoss and Adam optimizer
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 model = UNet(
     spatial_dims=2,
     in_channels=1,
@@ -252,7 +278,7 @@ model = UNet(
     strides=(2, 2, 2, 2),
     num_res_units=2,
 ).to(device)
-loss_function = DiceLoss(sigmoid=True)
+loss_function = DiceCELoss(sigmoid=True)
 optimizer = torch.optim.Adam(model.parameters(), 1e-3)
 
 # In[43]:
@@ -271,7 +297,7 @@ best_metric_epoch = -1
 epoch_loss_values = list()
 metric_values = list()
 
-epochs = 1
+epochs = numEpochs
 
 for epoch in range(epochs):
     print("-" * 10)
@@ -317,6 +343,7 @@ for epoch in range(epochs):
             dice_metric(y_pred=val_outputs, y=val_labels)
             # compute_fp_tp_probs(y_pred=val_outputs, y=val_labels)
 
+
         # aggregate the final mean dice result
         metric = dice_metric.aggregate().item()
         # reset the status for next validation round
@@ -326,6 +353,7 @@ for epoch in range(epochs):
             best_metric = metric
             best_metric_epoch = epoch + 1
             torch.save(model.state_dict(), "best_metric_model_segmentation2d_dict.pth")
+            torch.save(model.state_dict(), os.path.join(outputFolder, "best_metric_model_segmentation2d_dict.pth"))
             print("saved new best metric model")
         print(
             "current epoch: {} current mean dice: {:.4f} best mean dice: {:.4f} at epoch {}".format(
@@ -353,6 +381,7 @@ model.eval()
 cmap = colors.ListedColormap(['grey', 'red'])
 cmap1 = colors.ListedColormap(['grey', 'green'])
 
+i = 1
 with torch.no_grad():
     for test_data in test_loader:
         print(test_data['img_meta_dict']['filename_or_obj'])
@@ -377,12 +406,14 @@ with torch.no_grad():
         plt.subplot(1, 3, 3)
         plt.title('Ground Truth Mask')
         plt.imshow(np.rot90(test_images[2].cpu().permute(1, 2, 0), k=3), cmap='gray')
-        plt.imshow(np.rot90(test_labels[2].cpu().permute(1, 2, 0), k=3), cmap=cmap, alpha=0.3)
-        plt.show()
+        plt.imshow(np.rot90(test_labels[2].cpu().permute(1, 2, 0), k=3), cmap=cmap1, alpha=0.3)
+        #plt.show()
         # save as test_data['img_meta_dict']['filename_or_obj'][0][45:53]
-        plt.cla()
-        plt.clf()
-        plt.close()
+        plt.savefig(os.path.join(outputFolder,str(i)))
+        i += 1
+        #plt.cla()
+        #plt.clf()
+        #plt.close()
 
 # In[ ]:
 
